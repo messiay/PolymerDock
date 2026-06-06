@@ -1,7 +1,7 @@
 docking:
   engine: gnina          # 'gnina' or 'vina' as fallback
   anchor_length: 3       # number of monomers in the anchor fragment
-  vina_exhaustiveness: 8
+  vina_exhaustiveness: 4
   num_modes: 9
   box_padding: 10.0      # angstroms around active site
   box_padding_retry: 5.0 # added on retry if dock fails
