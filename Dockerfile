@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr2 \
     libxcursor1 \
     libxcomposite1 \
-    libasound2 \
+    libasound2t64 \
     libdbus-1-3 \
     libfontconfig1 \
     libxkbcommon0 \

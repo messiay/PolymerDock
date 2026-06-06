@@ -1,0 +1,10 @@
+results/
+.git/
+__pycache__/
+*.zip
+.gemini/
+venv/
+env/
+.streamlit/
+SimDock_Colab.ipynb
+package_for_colab.py

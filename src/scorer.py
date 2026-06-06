@@ -94,12 +94,20 @@ def compute_interaction_energy(complex_pdb, ligand_resname='UNL'):
                 ratio = R_min / r
                 ratio6 = ratio ** 6
                 ratio12 = ratio6 ** 2
-                e_lj += eps_ij * (ratio12 - 2 * ratio6)
+                pairwise_lj = eps_ij * (ratio12 - 2 * ratio6)
+                
+                # Cap the repulsion to handle unminimized steric clashes gracefully
+                if pairwise_lj > 10.0:
+                    pairwise_lj = 10.0
+                e_lj += pairwise_lj
                 
                 # 2. Electrostatic term (Coulomb's Law with implicit solvent dielectric)
                 # k_e = 332.0637 kcal/mol * A / e^2
                 if abs(l_q) > 1e-4 and abs(p_q) > 1e-4:
-                    e_el += (332.0637 * l_q * p_q) / (dielectric * r)
+                    pairwise_el = (332.0637 * l_q * p_q) / (dielectric * max(r, 1.5))
+                    # Cap electrostatic contribution per pair to prevent numerical explosion
+                    pairwise_el = max(-10.0, min(10.0, pairwise_el))
+                    e_el += pairwise_el
                     
     return e_lj + e_el
 
