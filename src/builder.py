@@ -4,33 +4,49 @@ from rdkit.Chem import AllChem
 from Bio.PDB import PDBParser
 import os
 
-def build_polymer(smiles_string, chain_length, config=None):
+def build_polymer(smiles_string, chain_length, config=None, linkage_type='ester'):
     """
     Generates a chemically valid 3D polymer molecule from a monomer SMILES string
-    by chaining them together through ester-like single bonds.
+    by chaining them together through the specified linkage type.
     """
     monomer = Chem.MolFromSmiles(smiles_string)
     if monomer is None:
         raise ValueError(f"Invalid monomer SMILES string: {smiles_string}")
         
-    # Find linking atoms
-    # 1. Acid oxygen tail (part of C(=O)[OH])
-    acid_pat = Chem.MolFromSmarts('[CX3](=O)[OX2H1]')
-    matches = monomer.GetSubstructMatches(acid_pat)
-    if not matches:
+    # Find tail index based on linkage type
+    LINKAGE_PATTERNS = {
+        'ester': ('[CX3](=O)[OX2H1]', 2),
+        'amide': ('[CX3](=O)[NX3H1]', 2),
+        'glycosidic': ('[OX2H1]', 0),
+    }
+    
+    tail_idx = None
+    if linkage_type in LINKAGE_PATTERNS:
+        pattern, match_idx = LINKAGE_PATTERNS[linkage_type]
+        pat = Chem.MolFromSmarts(pattern)
+        matches = monomer.GetSubstructMatches(pat)
+        if matches:
+            tail_idx = matches[0][match_idx]
+            
+    if tail_idx is None:
+        # Generic fallback: last atom
         tail_idx = monomer.GetNumAtoms() - 1
-    else:
-        tail_idx = matches[0][2]
         
-    # 2. Radical carbon head (carbon with radical electrons)
+    # Head index: carbon with radical electrons
     head_idx = None
     for atom in monomer.GetAtoms():
         if atom.GetSymbol() == 'C' and atom.GetNumRadicalElectrons() > 0:
             head_idx = atom.GetIdx()
             break
     if head_idx is None:
-        head_idx = 0
-        
+        # Try to find a carbon that is not the carbonyl carbon or tail atom
+        for atom in monomer.GetAtoms():
+            if atom.GetSymbol() == 'C' and atom.GetIdx() != tail_idx:
+                head_idx = atom.GetIdx()
+                break
+        if head_idx is None:
+            head_idx = 0
+            
     # Build polymer using RWMol
     rw_mol = Chem.RWMol(monomer)
     num_atoms = monomer.GetNumAtoms()

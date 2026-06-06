@@ -51,31 +51,73 @@ def scan_catalytic_viability(complex_pdb, enzyme_data, config):
     if not ligand_atoms:
         raise ValueError("No ligand atoms (residue UNL/LIG/UNK/POL or HETATM) found in complex.")
         
-    # 3. Detect carbonyl carbons in the ligand geometrically (C=O distance 1.15 to 1.30 A)
+    scissile_bond_type = enzyme_data.get('scissile_bond_type', 'ester_carbonyl') if enzyme_data else 'ester_carbonyl'
+    scissile_bond_position = enzyme_data.get('scissile_bond_position', 'terminal') if enzyme_data else 'terminal'
+    
+    # 3. Detect scissile carbons in the ligand geometrically
     carbons = [atom for atom in ligand_atoms if atom.element == 'C']
     oxygens = [atom for atom in ligand_atoms if atom.element == 'O']
     
-    carbonyl_carbons = []
-    for c_atom in carbons:
-        for o_atom in oxygens:
-            dist = (c_atom.get_vector() - o_atom.get_vector()).norm()
-            if 1.15 <= dist <= 1.30:
-                carbonyl_carbons.append(c_atom)
-                break
+    scissile_carbons = []
+    
+    if scissile_bond_type == 'glycosidic_carbon':
+        # Find carbon atoms with >= 2 oxygen neighbors within 1.5 A
+        for c_atom in carbons:
+            o_neighbors = 0
+            for o_atom in oxygens:
+                dist = (c_atom.get_vector() - o_atom.get_vector()).norm()
+                if dist <= 1.5:
+                    o_neighbors += 1
+            if o_neighbors >= 2:
+                scissile_carbons.append(c_atom)
+    else:
+        # Default: ester_carbonyl
+        for c_atom in carbons:
+            is_carbonyl = False
+            for o_atom in oxygens:
+                dist = (c_atom.get_vector() - o_atom.get_vector()).norm()
+                if 1.15 <= dist <= 1.30:
+                    is_carbonyl = True
+                    break
+            if is_carbonyl:
+                scissile_carbons.append(c_atom)
                 
-    if not carbonyl_carbons:
-        raise ValueError("No carbonyl carbons detected in the polymer ligand.")
+        if scissile_bond_position == 'terminal':
+            # Filter to keep only terminal ones (none of its bonded oxygens are linked to other carbons)
+            terminal_carbons = []
+            for c_atom in scissile_carbons:
+                o_neighbors = [o_atom for o_atom in oxygens
+                               if (c_atom.get_vector() - o_atom.get_vector()).norm() <= 1.45]
+                is_terminal = True
+                for o_atom in o_neighbors:
+                    other_c = [other_c_atom for other_c_atom in carbons
+                               if other_c_atom != c_atom and
+                               (o_atom.get_vector() - other_c_atom.get_vector()).norm() <= 1.6]
+                    if len(other_c) > 0:
+                        is_terminal = False
+                        break
+                if is_terminal:
+                    terminal_carbons.append(c_atom)
+            if terminal_carbons:
+                scissile_carbons = terminal_carbons
+                
+    if not scissile_carbons:
+        raise ValueError(f"No scissile carbons of type '{scissile_bond_type}' detected in the polymer ligand.")
         
     # 4. Measure minimum attack distance
     min_dist = float('inf')
     best_c_atom = None
-    for c_atom in carbonyl_carbons:
+    for c_atom in scissile_carbons:
         dist = (c_atom.get_vector() - P_nuc).norm()
         if dist < min_dist:
             min_dist = dist
             best_c_atom = c_atom
             
+    # Check if there is a catalytic cutoff override in enzyme_data
     cutoff = config['filters'].get('catalytic_cutoff', 4.5)
+    if enzyme_data and 'catalytic_cutoff_override' in enzyme_data:
+        cutoff = enzyme_data['catalytic_cutoff_override']
+        
     verdict = 'PASS' if min_dist < cutoff else 'FAIL'
     
     return verdict, min_dist

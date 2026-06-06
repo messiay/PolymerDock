@@ -1,5 +1,19 @@
-from rdkit import Chem
+import logging
 import os
+from rdkit import Chem
+
+def setup_logging(output_dir='./results'):
+    os.makedirs(output_dir, exist_ok=True)
+    logger = logging.getLogger('simdock')
+    logger.setLevel(logging.INFO)
+    if not logger.handlers:
+        file_handler = logging.FileHandler(os.path.join(output_dir, 'run.log'))
+        file_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+        logger.addHandler(file_handler)
+        logger.addHandler(stream_handler)
+    return logger
 
 def save_complex(enzyme_pdb, ligand_mol, output_pdb):
     """

@@ -2,6 +2,9 @@ import mdtraj as md
 import numpy as np
 from Bio.PDB import PDBParser
 import os
+import logging
+
+logger = logging.getLogger('simdock')
 
 # Standard Amber vdW parameters (R_min/2 in Angstroms, epsilon in kcal/mol)
 VDW_PARAMS = {
@@ -114,12 +117,16 @@ def compute_interaction_energy(complex_pdb, ligand_resname='UNL'):
                     pairwise_el = max(-10.0, min(10.0, pairwise_el))
                     e_el += pairwise_el
                     
-    print(f"Scoring Complex {complex_pdb}:")
-    print(f"  Uncapped Raw LJ: {raw_lj:.2f} kcal/mol | Capped LJ: {e_lj:.2f} kcal/mol")
-    print(f"  Uncapped Raw Elec: {raw_el:.2f} kcal/mol | Capped Elec: {e_el:.2f} kcal/mol")
+    n_pairs = len(ligand_atoms) * len(protein_atoms)
+    logger.info(f"Scoring Complex {complex_pdb}:")
+    logger.info(f"  Pairs evaluated: {n_pairs}")
+    if n_pairs > 0:
+        logger.info(f"  Per-pair avg LJ: {e_lj/n_pairs:.4f} kcal/mol")
+    logger.info(f"  Uncapped Raw LJ: {raw_lj:.2f} kcal/mol | Capped LJ: {e_lj:.2f} kcal/mol")
+    logger.info(f"  Uncapped Raw Elec: {raw_el:.2f} kcal/mol | Capped Elec: {e_el:.2f} kcal/mol")
     return e_lj + e_el
 
-def score_binding(complex_pdb, trajectory_dcd=None, ligand_resname='UNL'):
+def score_binding(complex_pdb, trajectory_dcd=None, ligand_resname='UNL', config=None):
     """
     Computes a hybrid MM-GBSA score for the complex PDB or trajectory.
     Score = E_interaction + G_nonpolar (SASA buried term)
@@ -166,8 +173,9 @@ def score_binding(complex_pdb, trajectory_dcd=None, ligand_resname='UNL'):
     # If a trajectory is provided, we compute the average over frames
     avg_e_int = 0.0
     if num_frames > 1 and trajectory_dcd:
-        # For efficiency, we sample up to 10 frames from the trajectory
-        step = max(1, num_frames // 10)
+        # Read from config:
+        n_frames_to_sample = config.get('scoring', {}).get('trajectory_frames', 50) if isinstance(config, dict) else 50
+        step = max(1, num_frames // n_frames_to_sample)
         frames_sampled = 0
         for f in range(0, num_frames, step):
             # Save frame to temporary PDB file
@@ -185,9 +193,12 @@ def score_binding(complex_pdb, trajectory_dcd=None, ligand_resname='UNL'):
         
     # Final score (lower is better binding)
     final_score = avg_e_int + g_nonpolar
+    if final_score < -300.0:
+        logger.warning(f"Score {final_score:.1f} is suspiciously large.")
+        logger.warning("Check for unminimized clashes or double-counted pairs.")
     return {
         'interaction_energy': avg_e_int,
         'nonpolar_solvation': g_nonpolar,
-        'buried_sasa': avg_buried_sasa,
+        'buried_sasa': avg_buried_sasa * 100.0, # Convert nm2 to A2
         'final_score': final_score
     }

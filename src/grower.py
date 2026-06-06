@@ -3,6 +3,9 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from Bio.PDB import PDBParser
 import os
+import logging
+
+logger = logging.getLogger('simdock')
 
 def get_enzyme_coords(enzyme_pdb):
     """
@@ -226,6 +229,7 @@ def grow_polymer(anchor_pose, monomer_smiles, chain_length, enzyme_pdb, config):
     """
     # 1. Strip hydrogens from the anchor pose to work with heavy atoms
     current = Chem.RemoveHs(anchor_pose)
+    num_anchor_heavy = current.GetNumAtoms()
     
     # 2. Prepare 3D monomer template (heavy atoms only)
     monomer_unit = Chem.MolFromSmiles(monomer_smiles)
@@ -261,7 +265,7 @@ def grow_polymer(anchor_pose, monomer_smiles, chain_length, enzyme_pdb, config):
                     candidates.append((candidate, energy))
                     
         if not candidates:
-            print(f"Growth failed at step {step}: No clash-free conformations found.")
+            logger.warning(f"Growth failed at step {step}: No clash-free conformations found.")
             return None
             
         current = min(candidates, key=lambda x: x[1])[0]
@@ -272,6 +276,11 @@ def grow_polymer(anchor_pose, monomer_smiles, chain_length, enzyme_pdb, config):
     # Relax only the hydrogens to preserve coordinates of the clash-free heavy skeleton
     optimize_hydrogens(current)
     
+    # Final hydrogen clash check against enzyme (on grown monomers only)
+    if not validate_final_hydrogens(current, enzyme_coords, num_anchor_heavy, threshold=1.2):
+        logger.warning("Final hydrogen clash check failed: optimized polymer hydrogens clash with the enzyme.")
+        return None
+        
     # 5. Compute Gasteiger partial charges for downstream scoring/docking
     try:
         AllChem.ComputeGasteigerCharges(current)
@@ -279,3 +288,22 @@ def grow_polymer(anchor_pose, monomer_smiles, chain_length, enzyme_pdb, config):
         pass  # Non-fatal — charges are a bonus for scoring accuracy
     
     return current
+
+def validate_final_hydrogens(mol, enzyme_coords, num_anchor_heavy, threshold=1.2):
+    conf = mol.GetConformer()
+    h_indices = []
+    for i in range(mol.GetNumAtoms()):
+        atom = mol.GetAtomWithIdx(i)
+        if atom.GetAtomicNum() == 1:
+            neighbors = atom.GetNeighbors()
+            if neighbors:
+                parent_idx = neighbors[0].GetIdx()
+                if parent_idx >= num_anchor_heavy:
+                    h_indices.append(i)
+                    
+    if len(enzyme_coords) > 0 and len(h_indices) > 0:
+        h_coords = np.array([conf.GetAtomPosition(i) for i in h_indices])
+        dists = np.linalg.norm(
+            h_coords[:, np.newaxis, :] - enzyme_coords[np.newaxis, :, :], axis=2)
+        return not np.any(dists < threshold)
+    return True

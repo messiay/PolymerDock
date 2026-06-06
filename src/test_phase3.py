@@ -64,7 +64,7 @@ def test_phase3():
     # 3. Run Scorer
     print("\nRunning MM-GBSA hybrid Scorer...")
     try:
-        score_data = score_binding(complex_pdb, ligand_resname='UNL')
+        score_data = score_binding(complex_pdb, ligand_resname='UNL', config=config)
         print(f"Scorer Output Detail: {score_data}")
         print(f"Final Score: {score_data['final_score']:.2f} kcal/mol")
         

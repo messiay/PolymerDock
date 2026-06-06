@@ -27,8 +27,8 @@ def test_phase4():
     # 2. Run MD Simulation (quick 500-step test)
     print("Launching OpenMM simulation...")
     try:
-        traj_dcd = run_md_simulation(complex_pdb, ligand_pdb, config, quick_test=True)
-        print(f"Trajectory DCD written to: {traj_dcd}")
+        traj_dcd, is_mock = run_md_simulation(complex_pdb, ligand_pdb, config, quick_test=True)
+        print(f"Trajectory DCD written to: {traj_dcd} (Is Mock: {is_mock})")
         assert os.path.exists(traj_dcd), "Trajectory DCD was not written"
     except Exception as e:
         print(f"MD Simulation run failed: {e}")
@@ -39,7 +39,14 @@ def test_phase4():
     # 3. Analyze Trajectory
     print("\nAnalyzing DCD trajectory...")
     try:
-        analysis = analyze_trajectory(traj_dcd, complex_pdb, config, ligand_resname='UNL')
+        mock_enzyme_data = {
+            "nucleophile_res_num": 160,
+            "nucleophile_res_name": "SER",
+            "nucleophile_atom_name": "OG",
+            "scissile_bond_type": "ester_carbonyl",
+            "scissile_bond_position": "terminal"
+        }
+        analysis = analyze_trajectory(traj_dcd, complex_pdb, config, ligand_resname='UNL', enzyme_data=mock_enzyme_data)
         print(f"Analysis Output Detail: {analysis}")
         print(f"Trajectory Verdict: {analysis['verdict']}")
         print(f"Average Ligand RMSD: {analysis['avg_rmsd']:.2f} Angstroms")

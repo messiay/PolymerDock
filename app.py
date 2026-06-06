@@ -15,7 +15,7 @@ from src.grower import grow_polymer
 from src.scanner import scan_catalytic_viability
 from src.scorer import score_binding
 from src.validator import run_md_simulation, analyze_trajectory, OPENMM_AVAILABLE
-from src.utils import save_complex
+from src.utils import save_complex, setup_logging
 
 # Setup page config
 st.set_page_config(page_title="SimDock Polymer v2.0", layout="wide", initial_sidebar_state="expanded")
@@ -312,6 +312,7 @@ if not OPENMM_AVAILABLE:
                "Do not use these simulated trajectories or verdicts for publication.")
 
 config = load_config()
+logger = setup_logging()
 enzymes_db = load_enzymes()
 
 # ─── Sidebar: Screen 1 — Lab Bench (Setup) ───────────────────────────────────
@@ -369,6 +370,7 @@ if st.session_state.pipeline_running:
         def add_log(msg):
             logs.append(f"[{time.strftime('%H:%M:%S')}] {msg}")
             log_box.code("\n".join(logs), language="text")
+            logger.info(msg)
             
         try:
             # ═══════════════════════════════════════════════════════════════
@@ -381,9 +383,20 @@ if st.session_state.pipeline_running:
             if monomer is None:
                 raise ValueError("Invalid SMILES string entered.")
             
+            # Get linkage type based on enzyme's scissile_bond_type
+            scissile_type = enzyme_data.get('scissile_bond_type', 'ester_carbonyl')
+            if 'ester' in scissile_type:
+                linkage_type = 'ester'
+            elif 'amide' in scissile_type:
+                linkage_type = 'amide'
+            elif 'glycosidic' in scissile_type:
+                linkage_type = 'glycosidic'
+            else:
+                linkage_type = 'ester'
+                
             # Build the full-length polymer for validation
-            add_log("Generating 3D polymer coordinates...")
-            polymer = build_polymer(monomer_smiles, chain_length, config)
+            add_log(f"Generating 3D polymer coordinates ({linkage_type} linkage)...")
+            polymer = build_polymer(monomer_smiles, chain_length, config, linkage_type=linkage_type)
             success, checks = validate_input_structure(polymer)
             add_log(f"Polymer validation checks: {checks}")
             if not success:
@@ -408,8 +421,8 @@ if st.session_state.pipeline_running:
             
             # Build anchor fragment (first 3 monomers per document spec, Gap #13)
             anchor_length = config['docking'].get('anchor_length', 3)
-            add_log(f"Building {anchor_length}-mer anchor fragment...")
-            anchor_base = build_polymer(monomer_smiles, anchor_length, config)
+            add_log(f"Building {anchor_length}-mer anchor fragment ({linkage_type} linkage)...")
+            anchor_base = build_polymer(monomer_smiles, anchor_length, config, linkage_type=linkage_type)
             
             # Check if real docking engines are available
             engine_path = config['paths'].get('gnina_binary', 'gnina')
@@ -484,8 +497,8 @@ if st.session_state.pipeline_running:
                     add_log(f"  Pose {pose_num}: ✓ PASS (distance {distance:.1f}Å < {config['filters']['catalytic_cutoff']}Å)")
                     
                     # Score passing poses with MM-GBSA
-                    score_data = score_binding(complex_pdb, ligand_resname='UNL')
-                    add_log(f"  Pose {pose_num}: Score = {score_data['final_score']:.2f} kcal/mol (SASA: {score_data['buried_sasa'] * 100:.1f} Å²)")
+                    score_data = score_binding(complex_pdb, ligand_resname='UNL', config=config)
+                    add_log(f"  Pose {pose_num}: Score = {score_data['final_score']:.2f} kcal/mol (SASA: {score_data['buried_sasa']:.1f} Å²)")
                     
                     passing_poses.append({
                         'pose_num': pose_num,
@@ -516,7 +529,7 @@ if st.session_state.pipeline_running:
                     verdict, distance = scan_catalytic_viability(complex_pdb, enzyme_data, config)
                     if distance < best_dist:
                         best_dist = distance
-                        score_data = score_binding(complex_pdb, ligand_resname='UNL')
+                        score_data = score_binding(complex_pdb, ligand_resname='UNL', config=config)
                         best_pose_data = {
                             'pose_num': pose_num,
                             'grown_mol': grown_mol,
@@ -544,20 +557,23 @@ if st.session_state.pipeline_running:
             # Validate top 1-3 poses
             n_to_validate = min(3, len(passing_poses))
             md_results = []
+            is_mock_run = False
             
             for rank in range(n_to_validate):
                 p = passing_poses[rank]
                 add_log(f"  Running MD on Rank {rank+1} (Pose {p['pose_num']})...")
                 
-                traj_dcd = run_md_simulation(p['complex_pdb'], p['ligand_pdb'], config, quick_test=True)
-                md_analysis = analyze_trajectory(traj_dcd, p['complex_pdb'], config, ligand_resname='UNL')
+                traj_dcd, is_mock = run_md_simulation(p['complex_pdb'], p['ligand_pdb'], config, quick_test=True)
+                if is_mock:
+                    is_mock_run = True
+                md_analysis = analyze_trajectory(traj_dcd, p['complex_pdb'], config, ligand_resname='UNL', enzyme_data=enzyme_data)
                 
                 add_log(f"  Rank {rank+1}: {md_analysis['verdict']} (RMSD: {md_analysis['avg_rmsd']:.2f}Å, Cat.Dist: {md_analysis['avg_distance']:.2f}Å)")
                 
                 # Gap #11: Re-score with trajectory for MM-GBSA averaging
                 if os.path.exists(traj_dcd):
                     try:
-                        traj_score = score_binding(p['complex_pdb'], trajectory_dcd=traj_dcd, ligand_resname='UNL')
+                        traj_score = score_binding(p['complex_pdb'], trajectory_dcd=traj_dcd, ligand_resname='UNL', config=config)
                         add_log(f"  Rank {rank+1}: Trajectory-averaged score = {traj_score['final_score']:.2f} kcal/mol")
                         p['score_data'] = traj_score  # Update with trajectory-averaged score
                     except Exception:
@@ -614,6 +630,7 @@ if st.session_state.pipeline_running:
                 'complex_pdb_path': best_complex,
                 'ligand_pdb_path': best_ligand,
                 'best_pose_num': best['pose_num'],
+                'is_mock': is_mock_run,
                 # Funnel statistics
                 'n_anchor_poses': n_anchor_poses,
                 'n_grown': n_grown,
@@ -637,6 +654,11 @@ if st.session_state.results is not None:
     with results_container:
         st.header("📊 Simulation Analysis & Report Card")
         
+        if res.get('is_mock', False):
+            st.error("⚠️ **Warning:** OpenMM was unavailable or crashed during validation. "
+                     "The MD stability metrics above are based on **MOCK DATA**. "
+                     "Do NOT use these results for publication.")
+            
         # Grid layout for report card and 3D viewer
         col1, col2 = st.columns([1, 1])
         
@@ -671,8 +693,10 @@ if st.session_state.results is not None:
                     <div>
                         <b>Reactivity:</b> {react_label}<br/>
                         <span style="font-size: 0.8rem; color: #8b949e; display: block; margin-top: 4px;">
-                            • <b>RMSD:</b> {res['md_rmsd']:.2f} Å — {'✅ Stable' if res.get('md_rmsd_fraction', 1.0) > 0.5 else '❌ Unstable'}<br/>
-                            • <b>Catalytic Contact:</b> {res.get('md_avg_distance', 0.0):.2f} Å avg — {'✅ Maintained' if res.get('md_catalytic_fraction', 1.0) > 0.5 else '❌ Lost during MD'}
+                            • <b>RMSD Stability:</b> {'✅ STABLE' if res.get('md_rmsd_fraction', 1.0) > 0.5 else '❌ UNSTABLE'} 
+                            (avg {res['md_rmsd']:.2f} Å, {res.get('md_rmsd_fraction', 1.0)*100:.0f}% of frames &lt; 3.0 Å)<br/>
+                            • <b>Catalytic Distance:</b> {'✅ MAINTAINED' if res.get('md_catalytic_fraction', 1.0) > 0.5 else '❌ LOST'} 
+                            (avg {res.get('md_avg_distance', 0.0):.2f} Å, {res.get('md_catalytic_fraction', 1.0)*100:.0f}% of frames &lt; {config['filters'].get('catalytic_cutoff_md', 5.0)} Å)
                         </span>
                     </div>
                 </div>
@@ -708,7 +732,7 @@ if st.session_state.results is not None:
                 st.markdown(f"""
                 <div class="report-card" style="text-align: center;">
                     <div class="metric-label">BURIED SASA</div>
-                    <div class="metric-value">{res['buried_sasa'] * 100:.1f} Å²</div>
+                    <div class="metric-value">{res['buried_sasa']:.1f} Å²</div>
                 </div>
                 """, unsafe_allow_html=True)
             with m2:

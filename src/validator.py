@@ -4,17 +4,21 @@ import numpy as np
 from rdkit import Chem
 import mdtraj as md
 import yaml
+import logging
+
+logger = logging.getLogger('simdock')
 
 # OpenMM imports
 try:
     from openmm.app import PDBFile, Modeller, ForceField, DCDReporter, PDBReporter, HBonds
     from openmm import LangevinIntegrator, MonteCarloBarostat, Platform, unit
     import openmm as mm
+    from openff.toolkit.topology import Molecule
     from openmmforcefields.generators import GAFFTemplateGenerator
     OPENMM_AVAILABLE = True
 except ImportError as e:
     import sys
-    print(f"Warning: OpenMM or openmmforcefields import failed: {e}", file=sys.stderr)
+    logger.warning(f"OpenMM or openmmforcefields import failed: {e}")
     OPENMM_AVAILABLE = False
 
 def run_md_simulation(complex_pdb, ligand_pdb, config, quick_test=True):
@@ -32,8 +36,8 @@ def run_md_simulation(complex_pdb, ligand_pdb, config, quick_test=True):
     trajectory_dcd = os.path.join(out_dir, "trajectory.dcd")
     
     if not OPENMM_AVAILABLE:
-        print("Warning: OpenMM or openmmforcefields not available. Falling back to mock trajectory.")
-        return generate_mock_trajectory(complex_pdb, trajectory_dcd)
+        logger.warning("OpenMM or openmmforcefields not available. Falling back to mock trajectory.")
+        return generate_mock_trajectory(complex_pdb, trajectory_dcd), True
         
     try:
         # 1. Load ligand and register GAFF parameters
@@ -53,6 +57,17 @@ def run_md_simulation(complex_pdb, ligand_pdb, config, quick_test=True):
             raise RuntimeError(f"Failed to parameterize ligand with GAFF: {e}")
             
         ff.registerTemplateGenerator(gaff.generator)
+        
+        # Verify parameterization succeeded
+        try:
+            test_system = ff.createSystem(modeller.topology)
+            for force in test_system.getForces():
+                if hasattr(force, 'getNumParticles'):
+                    assert force.getNumParticles() == modeller.topology.getNumAtoms(), \
+                        'GAFF2 failed: atom count mismatch — some atoms were not parameterized'
+        except Exception as e:
+            raise RuntimeError(f"Ligand parameterization verification failed: {e}")
+        
         
         # 2. Load complex and solvate with configurable padding
         padding_angstrom = config['md'].get('solvation_padding_A', 10.0)
@@ -77,7 +92,7 @@ def run_md_simulation(complex_pdb, ligand_pdb, config, quick_test=True):
             except Exception:
                 platform = Platform.getPlatformByName('CPU')
                 
-        print(f"Running simulation on platform: {platform.getName()}")
+        logger.info(f"Running simulation on platform: {platform.getName()}")
         
         # =========================================================
         # STEP A: Energy Minimization
@@ -90,7 +105,7 @@ def run_md_simulation(complex_pdb, ligand_pdb, config, quick_test=True):
         simulation.context.setPositions(modeller.positions)
         
         min_steps = config['md'].get('minimization_steps', 500)
-        print(f"Minimizing system energy (max {min_steps} steps)...")
+        logger.info(f"Minimizing system energy (max {min_steps} steps)...")
         simulation.minimizeEnergy(maxIterations=min_steps)
         
         # Save minimized positions
@@ -101,19 +116,19 @@ def run_md_simulation(complex_pdb, ligand_pdb, config, quick_test=True):
             # Quick test mode: abbreviated protocol
             # =========================================================
             # Short NVT (50 steps)
-            print("Running abbreviated NVT equilibration (50 steps)...")
+            logger.info("Running abbreviated NVT equilibration (50 steps)...")
             simulation.context.setVelocitiesToTemperature(300 * unit.kelvin)
             simulation.step(50)
             
             # Short NPT (50 steps)
-            print("Running abbreviated NPT equilibration (50 steps)...")
+            logger.info("Running abbreviated NPT equilibration (50 steps)...")
             barostat = MonteCarloBarostat(1.0 * unit.atmosphere, 300 * unit.kelvin)
             system.addForce(barostat)
             simulation.context.reinitialize(preserveState=True)
             simulation.step(50)
             
             # Short production (500 steps)
-            print("Running abbreviated production MD (500 steps)...")
+            logger.info("Running abbreviated production MD (500 steps)...")
             report_interval = 100
             simulation.reporters.append(DCDReporter(trajectory_dcd, report_interval))
             simulation.step(500)
@@ -123,47 +138,54 @@ def run_md_simulation(complex_pdb, ligand_pdb, config, quick_test=True):
             # Full protocol (per architecture document)
             # =========================================================
             
+            # Gradual Heating Ramp (from 0K to 300K in steps of 10K)
+            logger.info("Gradually heating system from 0K to 300K...")
+            heating_steps_per_increment = 250   # 0.5ps per 10K step (dt = 2fs)
+            for temp_k in range(10, 310, 10):
+                simulation.integrator.setTemperature(temp_k * unit.kelvin)
+                simulation.context.setVelocitiesToTemperature(temp_k * unit.kelvin)
+                simulation.step(heating_steps_per_increment)
+            logger.info("Heating complete. Starting NVT equilibration.")
+            
+            # Ensure integrator is set to final temperature
+            simulation.integrator.setTemperature(300 * unit.kelvin)
+            
             # NVT Equilibration
             nvt_ps = config['md'].get('equilibration_nvt_ps', 100)
             nvt_steps = int(nvt_ps / 0.002)  # dt = 2fs
-            print(f"Running NVT equilibration ({nvt_ps}ps, {nvt_steps} steps)...")
-            simulation.context.setVelocitiesToTemperature(300 * unit.kelvin)
+            logger.info(f"Running NVT equilibration ({nvt_ps}ps, {nvt_steps} steps)...")
             simulation.step(nvt_steps)
             
             # NPT Equilibration
             npt_ps = config['md'].get('equilibration_npt_ps', 100)
             npt_steps = int(npt_ps / 0.002)
-            print(f"Running NPT equilibration ({npt_ps}ps, {npt_steps} steps)...")
+            logger.info(f"Running NPT equilibration ({npt_ps}ps, {npt_steps} steps)...")
             barostat = MonteCarloBarostat(1.0 * unit.atmosphere, 300 * unit.kelvin)
             system.addForce(barostat)
-            simulation.context.reinitialize(preserveState=True)
-            # Restore positions from end of NVT
-            nvt_state = simulation.context.getState(getPositions=True, getVelocities=True)
-            simulation.context.setPositions(nvt_state.getPositions())
-            simulation.context.setVelocities(nvt_state.getVelocities())
+            simulation.context.reinitialize(preserveState=True) # State is already preserved
             simulation.step(npt_steps)
             
             # Production Run
             production_ns = config['md'].get('production_ns', 10)
             production_steps = int((production_ns * 1000) / 0.002)  # ns → ps → steps
             report_interval = int(10 / 0.002)  # Report every 10ps
-            print(f"Running production MD ({production_ns}ns, {production_steps} steps)...")
+            logger.info(f"Running production MD ({production_ns}ns, {production_steps} steps)...")
             simulation.reporters.append(DCDReporter(trajectory_dcd, report_interval))
             simulation.step(production_steps)
         
-        print("MD simulation completed successfully!")
-        return trajectory_dcd
+        logger.info("MD simulation completed successfully!")
+        return trajectory_dcd, False
         
     except Exception as e:
-        print(f"Warning: OpenMM simulation failed with error: {e}. Falling back to mock trajectory.")
-        return generate_mock_trajectory(complex_pdb, trajectory_dcd)
+        logger.warning(f"OpenMM simulation failed with error: {e}. Falling back to mock trajectory.")
+        return generate_mock_trajectory(complex_pdb, trajectory_dcd), True
 
 def generate_mock_trajectory(complex_pdb, output_dcd):
     """
     Generates a mock DCD trajectory containing slightly perturbed coordinates
     of the starting complex to allow offline testing and validation of analysis code.
     """
-    print("Generating mock DCD trajectory...")
+    logger.info("Generating mock DCD trajectory...")
     traj = md.load(complex_pdb)
     
     frames = []
@@ -181,10 +203,10 @@ def generate_mock_trajectory(complex_pdb, output_dcd):
         
     mock_traj = md.join(frames)
     mock_traj.save_dcd(output_dcd)
-    print(f"Mock trajectory saved to {output_dcd}")
+    logger.info(f"Mock trajectory saved to {output_dcd}")
     return output_dcd
 
-def analyze_trajectory(trajectory_dcd, complex_pdb, config, ligand_resname='UNL'):
+def analyze_trajectory(trajectory_dcd, complex_pdb, config, ligand_resname='UNL', enzyme_data=None):
     """
     Calculates ligand RMSD and catalytic triad attack distance over the MD trajectory.
     """
@@ -206,36 +228,79 @@ def analyze_trajectory(trajectory_dcd, complex_pdb, config, ligand_resname='UNL'
         rmsd = np.zeros(traj.n_frames)
         
     # 3. Compute catalytic distance over trajectory
-    # For PETase wild-type, the nucleophile is SER 160 OG
-    nuc_idx = traj.topology.select("resname SER and residue 160 and name OG")
-    if len(nuc_idx) == 0:
-        # Fallback search
-        nuc_idx = traj.topology.select("resname SER and name OG")
+    # Get nucleophile from enzyme_data
+    nuc_idx = []
+    if enzyme_data:
+        nuc_res_num = enzyme_data.get('nucleophile_res_num', 160)
+        nuc_res_name = enzyme_data.get('nucleophile_res_name', 'SER')
+        nuc_atom = enzyme_data.get('nucleophile_atom_name', 'OG')
+        nuc_idx = traj.topology.select(f"resSeq {nuc_res_num} and name {nuc_atom}")
         
+    if len(nuc_idx) == 0:
+        nuc_idx = traj.topology.select("resname SER and residue 160 and name OG")
+    if len(nuc_idx) == 0:
+        nuc_idx = traj.topology.select("resname SER and name OG")
     if len(nuc_idx) == 0:
         nuc_idx = traj.topology.select("name OG")
         
-    # Identify carbonyl carbons in the ligand geometrically on the first frame
+    # Identify scissile carbons in the ligand geometrically on the first frame
     ligand_carbons = [idx for idx in ligand_idx if traj.topology.atom(idx).element.symbol == 'C']
     ligand_oxygens = [idx for idx in ligand_idx if traj.topology.atom(idx).element.symbol == 'O']
     
-    # Find carbonyl carbons (C=O distance 1.15 to 1.30 A)
-    carbonyl_carbons = []
+    scissile_bond_type = enzyme_data.get('scissile_bond_type', 'ester_carbonyl') if enzyme_data else 'ester_carbonyl'
+    scissile_bond_position = enzyme_data.get('scissile_bond_position', 'terminal') if enzyme_data else 'terminal'
+    
+    scissile_carbons = []
     xyz0 = traj.xyz[0]
-    for c_idx in ligand_carbons:
-        for o_idx in ligand_oxygens:
-            dist = np.linalg.norm(xyz0[c_idx] - xyz0[o_idx]) * 10.0
-            if 1.15 <= dist <= 1.30:
-                carbonyl_carbons.append(c_idx)
-                break
+    
+    if scissile_bond_type == 'glycosidic_carbon':
+        # Find carbon atoms with >= 2 oxygen neighbors within 1.5 A
+        for c_idx in ligand_carbons:
+            o_neighbors = 0
+            for o_idx in ligand_oxygens:
+                dist = np.linalg.norm(xyz0[c_idx] - xyz0[o_idx]) * 10.0
+                if dist <= 1.5:
+                    o_neighbors += 1
+            if o_neighbors >= 2:
+                scissile_carbons.append(c_idx)
+    else:
+        # Default: ester_carbonyl
+        for c_idx in ligand_carbons:
+            is_carbonyl = False
+            for o_idx in ligand_oxygens:
+                dist = np.linalg.norm(xyz0[c_idx] - xyz0[o_idx]) * 10.0
+                if 1.15 <= dist <= 1.30:
+                    is_carbonyl = True
+                    break
+            if is_carbonyl:
+                scissile_carbons.append(c_idx)
+                
+        if scissile_bond_position == 'terminal':
+            # Filter to keep only terminal ones
+            terminal_carbons = []
+            for c_idx in scissile_carbons:
+                o_neighbors = [o_idx for o_idx in ligand_oxygens
+                               if np.linalg.norm(xyz0[c_idx] - xyz0[o_idx]) * 10.0 <= 1.45]
+                is_terminal = True
+                for o_idx in o_neighbors:
+                    other_c = [other_idx for other_idx in ligand_carbons
+                               if other_idx != c_idx and
+                               np.linalg.norm(xyz0[o_idx] - xyz0[other_idx]) * 10.0 <= 1.6]
+                    if len(other_c) > 0:
+                        is_terminal = False
+                        break
+                if is_terminal:
+                    terminal_carbons.append(c_idx)
+            if terminal_carbons:
+                scissile_carbons = terminal_carbons
                 
     distances = []
-    if len(nuc_idx) > 0 and len(carbonyl_carbons) > 0:
+    if len(nuc_idx) > 0 and len(scissile_carbons) > 0:
         nuc_atom = nuc_idx[0]
         for frame in range(traj.n_frames):
             frame_xyz = traj.xyz[frame]
             p_nuc = frame_xyz[nuc_atom]
-            frame_dists = [np.linalg.norm(frame_xyz[c_idx] - p_nuc) * 10.0 for c_idx in carbonyl_carbons]
+            frame_dists = [np.linalg.norm(frame_xyz[c_idx] - p_nuc) * 10.0 for c_idx in scissile_carbons]
             distances.append(min(frame_dists))
         distances = np.array(distances)
     else:

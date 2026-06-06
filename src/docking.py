@@ -4,6 +4,9 @@ import shutil
 import yaml
 from rdkit import Chem
 from meeko import MoleculePreparation
+import logging
+
+logger = logging.getLogger('simdock')
 
 def prepare_ligand_pdbqt(rdkit_mol, output_path):
     """
@@ -21,7 +24,7 @@ def run_docking_cmd(cmd):
     """
     Runs a subprocess command and handles errors.
     """
-    print(f"Executing: {' '.join(cmd)}")
+    logger.info(f"Executing: {' '.join(cmd)}")
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"Docking execution failed: {result.stderr}")
@@ -62,7 +65,13 @@ def dock_anchor(anchor_mol, enzyme_pdb, center, config):
             receptor_file = receptor_pdbqt
             
     num_modes = config['docking'].get('num_modes', 9)
-    exhaustiveness = config['docking'].get('vina_exhaustiveness', 8)
+    
+    # Automatically select exhaustiveness based on Colab vs. local environment
+    is_colab = os.path.exists('/content') or 'COLAB_GPU' in os.environ
+    if is_colab:
+        exhaustiveness = config['docking'].get('vina_exhaustiveness_colab', 4)
+    else:
+        exhaustiveness = config['docking'].get('vina_exhaustiveness', 8)
     
     # Docking box settings
     padding = config['docking'].get('box_padding', 10.0)
@@ -76,6 +85,7 @@ def dock_anchor(anchor_mol, enzyme_pdb, center, config):
     
     # Command builder
     def build_command(current_box_size):
+        seed = config['docking'].get('random_seed', 42)
         if engine == 'gnina':
             gnina_bin = config['paths'].get('gnina_binary', 'gnina')
             cmd = [
@@ -90,6 +100,7 @@ def dock_anchor(anchor_mol, enzyme_pdb, center, config):
                 '--size_z', str(current_box_size),
                 '--exhaustiveness', str(exhaustiveness),
                 '--num_modes', str(num_modes),
+                '--seed', str(seed),
                 '--out', out_poses
             ]
         else: # Vina fallback
@@ -106,6 +117,7 @@ def dock_anchor(anchor_mol, enzyme_pdb, center, config):
                 '--size_z', str(current_box_size),
                 '--exhaustiveness', str(exhaustiveness),
                 '--num_modes', str(num_modes),
+                '--seed', str(seed),
                 '--out', out_poses
             ]
         return cmd
@@ -114,7 +126,7 @@ def dock_anchor(anchor_mol, enzyme_pdb, center, config):
     try:
         run_docking_cmd(build_command(box_size))
     except Exception as e:
-        print(f"Docking failed with box size {box_size}. Retrying with larger box...")
+        logger.warning(f"Docking failed with box size {box_size}. Retrying with larger box...")
         # Retry with larger box
         box_size += retry_padding
         try:
@@ -133,7 +145,7 @@ def dock_anchor(anchor_mol, enzyme_pdb, center, config):
                         Chem.SanitizeMol(mol)
                         poses.append(mol)
                     except Exception as e:
-                        print(f"Discarding docked pose due to sanitization failure: {e}")
+                        logger.warning(f"Discarding docked pose due to sanitization failure: {e}")
                         continue
         else:
             with open(out_poses, 'r') as f:

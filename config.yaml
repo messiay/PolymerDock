@@ -1,10 +1,15 @@
 docking:
   engine: gnina          # 'gnina' or 'vina' as fallback
   anchor_length: 3       # number of monomers in the anchor fragment
-  vina_exhaustiveness: 4
+  vina_exhaustiveness: 8        # local development (your RTX 3050 handles this)
+  vina_exhaustiveness_colab: 4  # colab only — note in README
+  vina_exhaustiveness_pub: 16   # use this for final benchmark runs
+  random_seed: 42
   num_modes: 9
   box_padding: 10.0      # angstroms around active site
   box_padding_retry: 5.0 # added on retry if dock fails
+scoring:
+  trajectory_frames: 50
 growth:
   rotation_samples: 36   # torsion angles to try per monomer
   clash_threshold: 0.5   # angstroms

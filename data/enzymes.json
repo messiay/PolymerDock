@@ -2,12 +2,37 @@
   "PETase": {
     "pdb_id": "5XJH",
     "description": "PET-degrading enzyme from Ideonella sakaiensis",
-    "catalytic_residues": {
-      "SER": 160,
-      "HIS": 237,
-      "ASP": 206
-    },
+    "catalytic_residues": { "SER": 160, "HIS": 237, "ASP": 206 },
     "nucleophile_res_num": 160,
-    "nucleophile_atom_name": "OG"
+    "nucleophile_res_name": "SER",
+    "nucleophile_atom_name": "OG",
+    "mechanism": "serine_hydrolase",
+    "scissile_bond_type": "ester_carbonyl",
+    "scissile_bond_position": "terminal",
+    "catalytic_cutoff_override": 4.5
+  },
+  "Cutinase": {
+    "pdb_id": "3GBS",
+    "description": "Cutinase from Fusarium solani — PET hydrolysis",
+    "catalytic_residues": { "SER": 120, "HIS": 188, "ASP": 175 },
+    "nucleophile_res_num": 120,
+    "nucleophile_res_name": "SER",
+    "nucleophile_atom_name": "OG",
+    "mechanism": "serine_hydrolase",
+    "scissile_bond_type": "ester_carbonyl",
+    "scissile_bond_position": "terminal",
+    "catalytic_cutoff_override": 4.5
+  },
+  "Cellulase_Cel48F": {
+    "pdb_id": "1FAE",
+    "description": "Processive endocellulase — cellulose degradation",
+    "catalytic_residues": { "GLU": 55, "ASP": 230 },
+    "nucleophile_res_num": 55,
+    "nucleophile_res_name": "GLU",
+    "nucleophile_atom_name": "OE1",
+    "mechanism": "glycoside_hydrolase",
+    "scissile_bond_type": "glycosidic_carbon",
+    "scissile_bond_position": "any",
+    "catalytic_cutoff_override": 3.5
   }
 }
