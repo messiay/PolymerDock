@@ -72,7 +72,7 @@ def dock_anchor(anchor_mol, enzyme_pdb, center, config):
     # Let's compute box size from ligand coordinates or use a default 15x15x15 box.
     box_size = 15.0 + padding
     
-    out_poses = os.path.join(out_dir, "docked_poses.pdbqt")
+    out_poses = os.path.join(out_dir, "docked_poses.sdf" if engine == 'gnina' else "docked_poses.pdbqt")
     
     # Command builder
     def build_command(current_box_size):
@@ -88,6 +88,7 @@ def dock_anchor(anchor_mol, enzyme_pdb, center, config):
                 '--size_x', str(current_box_size),
                 '--size_y', str(current_box_size),
                 '--size_z', str(current_box_size),
+                '--exhaustiveness', str(exhaustiveness),
                 '--num_modes', str(num_modes),
                 '--out', out_poses
             ]
@@ -121,32 +122,45 @@ def dock_anchor(anchor_mol, enzyme_pdb, center, config):
         except Exception as retry_err:
             raise RuntimeError(f"Docking failed on retry: {retry_err}")
             
-    # Parse docked poses from out_poses PDBQT/PDB back into RDKit molecules
-    # Meeko PDBQT files can be read by Chem.MolFromPDBFile or split into separate poses.
+    # Parse docked poses from out_poses back into RDKit molecules
     poses = []
     if os.path.exists(out_poses):
-        # We parse the output file. PDBQT output of Vina/GNINA has MODEL records.
-        # We can split the PDBQT by MODEL and parse each.
-        with open(out_poses, 'r') as f:
-            lines = f.readlines()
-            
-        current_pose_lines = []
-        for line in lines:
-            if line.startswith("MODEL"):
-                current_pose_lines = []
-            elif line.startswith("ENDMDL"):
-                # Parse current_pose_lines
-                pose_str = "".join(current_pose_lines)
-                pose_mol = Chem.MolFromPDBBlock(pose_str)
+        if out_poses.endswith('.sdf'):
+            supplier = Chem.SDMolSupplier(out_poses, sanitize=False)
+            for mol in supplier:
+                if mol is not None:
+                    poses.append(mol)
+        else:
+            with open(out_poses, 'r') as f:
+                lines = f.readlines()
+                
+            current_pose_lines = []
+            for line in lines:
+                if line.startswith("MODEL"):
+                    current_pose_lines = []
+                elif line.startswith("ENDMDL"):
+                    # Clean PDBQT specific columns to prevent RDKit crashes
+                    cleaned_lines = []
+                    for p in current_pose_lines:
+                        if p.startswith("ATOM") or p.startswith("HETATM"):
+                            # Replace the AutoDock atom type at columns 77-78 with standard element
+                            element = p[77:79].strip()
+                            # simple hack: just remove it, MolFromPDBBlock tries to infer from atom name
+                            cleaned_lines.append(p[:76] + "    \n")
+                        else:
+                            cleaned_lines.append(p)
+                            
+                    pose_str = "".join(cleaned_lines)
+                    pose_mol = Chem.MolFromPDBBlock(pose_str, sanitize=False)
+                    if pose_mol:
+                        poses.append(pose_mol)
+                else:
+                    current_pose_lines.append(line)
+                    
+            # If no MODEL records, try parsing whole file
+            if not poses:
+                pose_mol = Chem.MolFromPDBFile(out_poses, sanitize=False)
                 if pose_mol:
                     poses.append(pose_mol)
-            else:
-                current_pose_lines.append(line)
-                
-        # If there are no MODEL records (e.g. only 1 pose written), parse the whole file
-        if not poses:
-            pose_mol = Chem.MolFromPDBFile(out_poses)
-            if pose_mol:
-                poses.append(pose_mol)
                 
     return poses
