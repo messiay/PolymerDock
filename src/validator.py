@@ -12,7 +12,9 @@ try:
     import openmm as mm
     from openmmforcefields.generators import GAFFTemplateGenerator
     OPENMM_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    import sys
+    print(f"Warning: OpenMM or openmmforcefields import failed: {e}", file=sys.stderr)
     OPENMM_AVAILABLE = False
 
 def run_md_simulation(complex_pdb, ligand_pdb, config, quick_test=True):
