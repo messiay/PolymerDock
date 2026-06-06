@@ -242,11 +242,12 @@ def analyze_trajectory(trajectory_dcd, complex_pdb, config, ligand_resname='UNL'
         distances = np.ones(traj.n_frames) * 99.9
         
     # Compute stability metrics
-    cutoff = config['filters'].get('catalytic_cutoff', 4.5)
+    cutoff_static = config['filters'].get('catalytic_cutoff', 4.5)
+    cutoff_md = config['filters'].get('catalytic_cutoff_md', 5.0)
     min_rmsd_threshold = config['filters'].get('min_stability_rmsd', 3.0)
     
     rmsd_stable_fraction = np.mean(rmsd < min_rmsd_threshold)
-    catalytic_stable_fraction = np.mean(distances < cutoff)
+    catalytic_stable_fraction = np.mean(distances < cutoff_md)
     
     verdict = 'STABLE' if rmsd_stable_fraction > 0.5 and catalytic_stable_fraction > 0.5 else 'UNSTABLE'
     

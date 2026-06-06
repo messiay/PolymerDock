@@ -14,7 +14,7 @@ from src.docking import dock_anchor
 from src.grower import grow_polymer
 from src.scanner import scan_catalytic_viability
 from src.scorer import score_binding
-from src.validator import run_md_simulation, analyze_trajectory
+from src.validator import run_md_simulation, analyze_trajectory, OPENMM_AVAILABLE
 from src.utils import save_complex
 
 # Setup page config
@@ -306,6 +306,11 @@ st.title("🔬 SimDock Polymer v2.0")
 st.subheader("Universal Polymer-Enzyme Catalytic Simulation Engine")
 st.write("---")
 
+if not OPENMM_AVAILABLE:
+    st.warning("⚠️ **Warning:** OpenMM or its forcefields are not available in this environment. "
+               "The pipeline will fall back to generating **MOCK DATA** for the Molecular Dynamics (Phase 4) validation. "
+               "Do not use these simulated trajectories or verdicts for publication.")
+
 config = load_config()
 enzymes_db = load_enzymes()
 
@@ -480,7 +485,7 @@ if st.session_state.pipeline_running:
                     
                     # Score passing poses with MM-GBSA
                     score_data = score_binding(complex_pdb, ligand_resname='UNL')
-                    add_log(f"  Pose {pose_num}: Score = {score_data['final_score']:.2f} kcal/mol (SASA: {score_data['buried_sasa']:.1f} Å²)")
+                    add_log(f"  Pose {pose_num}: Score = {score_data['final_score']:.2f} kcal/mol (SASA: {score_data['buried_sasa'] * 100:.1f} Å²)")
                     
                     passing_poses.append({
                         'pose_num': pose_num,
@@ -603,6 +608,9 @@ if st.session_state.pipeline_running:
                 'buried_sasa': best['score_data']['buried_sasa'],
                 'md_verdict': best['md_analysis']['verdict'],
                 'md_rmsd': best['md_analysis']['avg_rmsd'],
+                'md_rmsd_fraction': best['md_analysis']['rmsd_stable_fraction'],
+                'md_catalytic_fraction': best['md_analysis']['catalytic_stable_fraction'],
+                'md_avg_distance': best['md_analysis']['avg_distance'],
                 'complex_pdb_path': best_complex,
                 'ligand_pdb_path': best_ligand,
                 'best_pose_num': best['pose_num'],
@@ -662,7 +670,10 @@ if st.session_state.results is not None:
                     <div class="traffic-light {react_class}"></div>
                     <div>
                         <b>Reactivity:</b> {react_label}<br/>
-                        <span style="font-size: 0.8rem; color: #8b949e;">MD stability: {res['md_verdict']} (avg RMSD: {res['md_rmsd']:.2f} Å). Both geometry and stability must pass.</span>
+                        <span style="font-size: 0.8rem; color: #8b949e; display: block; margin-top: 4px;">
+                            • <b>RMSD:</b> {res['md_rmsd']:.2f} Å — {'✅ Stable' if res.get('md_rmsd_fraction', 1.0) > 0.5 else '❌ Unstable'}<br/>
+                            • <b>Catalytic Contact:</b> {res.get('md_avg_distance', 0.0):.2f} Å avg — {'✅ Maintained' if res.get('md_catalytic_fraction', 1.0) > 0.5 else '❌ Lost during MD'}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -697,7 +708,7 @@ if st.session_state.results is not None:
                 st.markdown(f"""
                 <div class="report-card" style="text-align: center;">
                     <div class="metric-label">BURIED SASA</div>
-                    <div class="metric-value">{res['buried_sasa']:.1f} Å²</div>
+                    <div class="metric-value">{res['buried_sasa'] * 100:.1f} Å²</div>
                 </div>
                 """, unsafe_allow_html=True)
             with m2:

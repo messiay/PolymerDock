@@ -129,7 +129,12 @@ def dock_anchor(anchor_mol, enzyme_pdb, center, config):
             supplier = Chem.SDMolSupplier(out_poses, sanitize=False)
             for mol in supplier:
                 if mol is not None:
-                    poses.append(mol)
+                    try:
+                        Chem.SanitizeMol(mol)
+                        poses.append(mol)
+                    except Exception as e:
+                        print(f"Discarding docked pose due to sanitization failure: {e}")
+                        continue
         else:
             with open(out_poses, 'r') as f:
                 lines = f.readlines()

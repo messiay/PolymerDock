@@ -73,6 +73,8 @@ def compute_interaction_energy(complex_pdb, ligand_resname='UNL'):
         
     e_lj = 0.0
     e_el = 0.0
+    raw_lj = 0.0
+    raw_el = 0.0
     
     # Cutoff distance for speed (12 Angstroms)
     cutoff = 12.0
@@ -95,6 +97,7 @@ def compute_interaction_energy(complex_pdb, ligand_resname='UNL'):
                 ratio6 = ratio ** 6
                 ratio12 = ratio6 ** 2
                 pairwise_lj = eps_ij * (ratio12 - 2 * ratio6)
+                raw_lj += pairwise_lj
                 
                 # Cap the repulsion to handle unminimized steric clashes gracefully
                 if pairwise_lj > 10.0:
@@ -104,11 +107,16 @@ def compute_interaction_energy(complex_pdb, ligand_resname='UNL'):
                 # 2. Electrostatic term (Coulomb's Law with implicit solvent dielectric)
                 # k_e = 332.0637 kcal/mol * A / e^2
                 if abs(l_q) > 1e-4 and abs(p_q) > 1e-4:
+                    raw_el += (332.0637 * l_q * p_q) / (dielectric * r)
+                    
                     pairwise_el = (332.0637 * l_q * p_q) / (dielectric * max(r, 1.5))
                     # Cap electrostatic contribution per pair to prevent numerical explosion
                     pairwise_el = max(-10.0, min(10.0, pairwise_el))
                     e_el += pairwise_el
                     
+    print(f"Scoring Complex {complex_pdb}:")
+    print(f"  Uncapped Raw LJ: {raw_lj:.2f} kcal/mol | Capped LJ: {e_lj:.2f} kcal/mol")
+    print(f"  Uncapped Raw Elec: {raw_el:.2f} kcal/mol | Capped Elec: {e_el:.2f} kcal/mol")
     return e_lj + e_el
 
 def score_binding(complex_pdb, trajectory_dcd=None, ligand_resname='UNL'):

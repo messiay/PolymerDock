@@ -118,8 +118,8 @@ def validate_input_structure(mol):
 
 def get_active_site_center(pdb_file, catalytic_residues):
     """
-    Detects active site center coordinates dynamically by averaging CA atoms 
-    of specified catalytic residues in the enzyme PDB.
+    Detects active site center coordinates dynamically by averaging reactive sidechain
+    atoms of specified catalytic residues in the enzyme PDB.
     """
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure('enzyme', pdb_file)
@@ -132,10 +132,23 @@ def get_active_site_center(pdb_file, catalytic_residues):
     else:
         chain = list(model.get_chains())[0]
         
+    sidechain_atoms = {
+        'SER': 'OG',
+        'HIS': 'NE2',
+        'ASP': 'OD1',
+        'GLU': 'OE1',
+        'CYS': 'SG',
+        'LYS': 'NZ',
+        'TYR': 'OH'
+    }
+        
     for res_name, res_num in catalytic_residues.items():
+        target_atom = sidechain_atoms.get(res_name.upper(), 'CA')
         if res_num in chain:
             residue = chain[res_num]
-            if 'CA' in residue:
+            if target_atom in residue:
+                coords.append(residue[target_atom].get_vector().get_array())
+            elif 'CA' in residue:
                 coords.append(residue['CA'].get_vector().get_array())
             else:
                 res_coords = [atom.get_vector().get_array() for atom in residue]
@@ -146,7 +159,11 @@ def get_active_site_center(pdb_file, catalytic_residues):
             for c in model.get_chains():
                 if res_num in c:
                     residue = c[res_num]
-                    if 'CA' in residue:
+                    if target_atom in residue:
+                        coords.append(residue[target_atom].get_vector().get_array())
+                        found = True
+                        break
+                    elif 'CA' in residue:
                         coords.append(residue['CA'].get_vector().get_array())
                         found = True
                         break

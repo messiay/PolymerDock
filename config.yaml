@@ -10,6 +10,7 @@ growth:
   clash_threshold: 0.5   # angstroms
 filters:
   catalytic_cutoff: 4.5  # angstroms — the key parameter
+  catalytic_cutoff_md: 5.0 # relaxed cutoff for MD checks
   min_stability_rmsd: 3.0
   catalytic_time_fraction: 0.5  # must hold <4.5A for 50% of MD
 md:
