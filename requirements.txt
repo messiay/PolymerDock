@@ -1,0 +1,15 @@
+numpy
+scipy
+pandas
+pyyaml
+rdkit
+biopython
+meeko
+pdbfixer
+openmm
+mdtraj
+streamlit
+py3Dmol
+stmol
+matplotlib
+gemmi

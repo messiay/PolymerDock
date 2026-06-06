@@ -1,0 +1,25 @@
+docking:
+  engine: gnina          # 'gnina' or 'vina' as fallback
+  anchor_length: 3       # number of monomers in the anchor fragment
+  vina_exhaustiveness: 8
+  num_modes: 9
+  box_padding: 10.0      # angstroms around active site
+  box_padding_retry: 5.0 # added on retry if dock fails
+growth:
+  rotation_samples: 36   # torsion angles to try per monomer
+  clash_threshold: 0.5   # angstroms
+filters:
+  catalytic_cutoff: 4.5  # angstroms — the key parameter
+  min_stability_rmsd: 3.0
+  catalytic_time_fraction: 0.5  # must hold <4.5A for 50% of MD
+md:
+  minimization_steps: 500
+  equilibration_nvt_ps: 100    # NVT equilibration duration in picoseconds
+  equilibration_npt_ps: 100    # NPT equilibration duration in picoseconds
+  production_ns: 10            # 10 nanosecond production run (per document spec)
+  water_model: TIP3P
+  solvation_padding_A: 10.0   # water box padding in angstroms
+paths:
+  gnina_binary: /usr/bin/gnina
+  vina_binary: /usr/bin/vina
+  output_dir: ./results

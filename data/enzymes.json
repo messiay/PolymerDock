@@ -1,0 +1,13 @@
+{
+  "PETase": {
+    "pdb_id": "5XJH",
+    "description": "PET-degrading enzyme from Ideonella sakaiensis",
+    "catalytic_residues": {
+      "SER": 160,
+      "HIS": 237,
+      "ASP": 206
+    },
+    "nucleophile_res_num": 160,
+    "nucleophile_atom_name": "OG"
+  }
+}

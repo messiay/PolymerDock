@@ -1,0 +1,16 @@
+# Ignore results and large generated files
+results/
+__pycache__/
+*.zip
+.gemini/
+
+# Virtual environment (if any)
+env/
+venv/
+.env
+
+# Python caching
+*.pyc
+
+# Local app testing
+.streamlit/
