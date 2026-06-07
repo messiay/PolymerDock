@@ -50,13 +50,21 @@ def run_md_simulation(complex_pdb, ligand_pdb, config, quick_test=True):
         try:
             from openff.toolkit.topology import Molecule
             off_mol = Molecule.from_rdkit(ligand_mol, allow_undefined_stereo=True)
-            gaff = GAFFTemplateGenerator(off_mol, forcefield='gaff2')
+            gaff = GAFFTemplateGenerator(off_mol, forcefield='gaff-2.11')
         except ImportError:
             raise RuntimeError("openff-toolkit is not installed; small-molecule parameterization is unavailable.")
         except Exception as e:
             raise RuntimeError(f"Failed to parameterize ligand with GAFF: {e}")
             
         ff.registerTemplateGenerator(gaff.generator)
+        
+        # 2. Load complex and solvate with configurable padding
+        padding_angstrom = config['md'].get('solvation_padding_A', 10.0)
+        padding_nm = padding_angstrom / 10.0  # Convert Å to nm
+        
+        pdb = PDBFile(complex_pdb)
+        modeller = Modeller(pdb.topology, pdb.positions)
+        modeller.addSolvent(ff, model='tip3p', padding=padding_nm * unit.nanometers)
         
         # Verify parameterization succeeded
         try:
@@ -67,15 +75,6 @@ def run_md_simulation(complex_pdb, ligand_pdb, config, quick_test=True):
                         'GAFF2 failed: atom count mismatch — some atoms were not parameterized'
         except Exception as e:
             raise RuntimeError(f"Ligand parameterization verification failed: {e}")
-        
-        
-        # 2. Load complex and solvate with configurable padding
-        padding_angstrom = config['md'].get('solvation_padding_A', 10.0)
-        padding_nm = padding_angstrom / 10.0  # Convert Å to nm
-        
-        pdb = PDBFile(complex_pdb)
-        modeller = Modeller(pdb.topology, pdb.positions)
-        modeller.addSolvent(ff, model='tip3p', padding=padding_nm * unit.nanometers)
         
         # 3. Create OpenMM System
         system = ff.createSystem(modeller.topology, 

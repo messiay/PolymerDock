@@ -514,33 +514,10 @@ if st.session_state.pipeline_running:
             n_passed_filter = len(passing_poses)
             add_log(f"Filter complete: {n_passed_filter}/{n_grown} poses passed catalytic geometry check.")
             
-            # If no poses pass the strict filter, take the best-distance one anyway for reporting
             if n_passed_filter == 0:
-                add_log("⚠ No poses passed strict filter. Selecting closest pose for reporting...")
-                # Re-evaluate all grown poses and pick the one with smallest attack distance
-                best_dist = float('inf')
-                best_pose_data = None
-                for pose_num, grown_mol in grown_poses:
-                    ligand_pdb = f"results/grown_pose_{pose_num}.pdb"
-                    complex_pdb = f"results/complex_pose_{pose_num}.pdb"
-                    if not os.path.exists(complex_pdb):
-                        Chem.MolToPDBFile(grown_mol, ligand_pdb)
-                        save_complex(pdb_file, grown_mol, complex_pdb)
-                    verdict, distance = scan_catalytic_viability(complex_pdb, enzyme_data, config)
-                    if distance < best_dist:
-                        best_dist = distance
-                        score_data = score_binding(complex_pdb, ligand_resname='UNL', config=config)
-                        best_pose_data = {
-                            'pose_num': pose_num,
-                            'grown_mol': grown_mol,
-                            'ligand_pdb': ligand_pdb,
-                            'complex_pdb': complex_pdb,
-                            'distance': distance,
-                            'score_data': score_data,
-                        }
-                passing_poses = [best_pose_data]
-                n_passed_filter = 0  # Keep as 0 for reporting — none truly passed
-                add_log(f"  Using Pose {best_pose_data['pose_num']} (distance {best_dist:.1f}Å) for downstream analysis.")
+                add_log("🚨 No poses passed the geometry filter.")
+                st.error("No poses passed the geometry filter.")
+                st.stop()
             
             # Rank passing poses by binding score (lower = better)
             passing_poses.sort(key=lambda p: p['score_data']['final_score'])
@@ -566,6 +543,7 @@ if st.session_state.pipeline_running:
                 traj_dcd, is_mock = run_md_simulation(p['complex_pdb'], p['ligand_pdb'], config, quick_test=True)
                 if is_mock:
                     is_mock_run = True
+                    st.error("⚠️ OpenMM unavailable. MD results are MOCK DATA.")
                 md_analysis = analyze_trajectory(traj_dcd, p['complex_pdb'], config, ligand_resname='UNL', enzyme_data=enzyme_data)
                 
                 add_log(f"  Rank {rank+1}: {md_analysis['verdict']} (RMSD: {md_analysis['avg_rmsd']:.2f}Å, Cat.Dist: {md_analysis['avg_distance']:.2f}Å)")
