@@ -123,7 +123,7 @@ def load_enzymes():
     with open("data/enzymes.json", "r") as f:
         return json.load(f)
 
-def render_3d_complex(complex_pdb_path):
+def render_3d_complex(complex_pdb_path, nucleophile_res_num=160, nucleophile_res_name="SER"):
     """Render py3Dmol viewer directly as an HTML component."""
     if not os.path.exists(complex_pdb_path):
         st.error("Complex structure file not found.")
@@ -148,8 +148,8 @@ def render_3d_complex(complex_pdb_path):
       viewer.setStyle({{resname: 'LIG'}}, {{stick: {{colorscheme: 'cyanCarbon', radius: 0.25}}}});
       viewer.setStyle({{resname: 'POL'}}, {{stick: {{colorscheme: 'cyanCarbon', radius: 0.25}}}});
       
-      // Highlight Catalytic Residues (Ser160)
-      viewer.setStyle({{resseq: 160}}, {{stick: {{colorscheme: 'magentaCarbon', radius: 0.25}}, cartoon: {{color: 'magenta'}}}});
+      // Highlight Catalytic Residues
+      viewer.setStyle({{resseq: {nucleophile_res_num}}}, {{stick: {{colorscheme: 'magentaCarbon', radius: 0.25}}, cartoon: {{color: 'magenta'}}}});
       
       viewer.zoomTo();
       viewer.render();
@@ -752,5 +752,7 @@ if st.session_state.results is not None:
             
         with col2:
             st.subheader("🖥️ Interactive 3D Active Site Pocket")
-            render_3d_complex(res['complex_pdb_path'])
-            st.write("**Magenta** stick residue = Ser160 nucleophile. **Cyan** stick structure = grown polymer chain.")
+            nuc_num = enzyme_data.get('nucleophile_res_num', 160)
+            nuc_name = enzyme_data.get('nucleophile_res_name', 'SER')
+            render_3d_complex(res['complex_pdb_path'], nuc_num, nuc_name)
+            st.write(f"**Magenta** stick residue = {nuc_name}{nuc_num} nucleophile. **Cyan** stick structure = grown polymer chain.")
