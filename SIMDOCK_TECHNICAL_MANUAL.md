@@ -29,7 +29,8 @@ graph TD
 
 ## 2. Directory & Module Map
 
-* **`app.py`**: The Streamlit user interface, managing setup controls, visual reports, real-time logging, PDF reporting, and component rendering.
+* **`api.py`**: The FastAPI backend server, exposing REST API endpoints to manage asynchronous simulation tasks, progress statuses, log streams, and file downloads.
+* **`frontend/`**: The React/Vite web interface. Pre-built production assets (`dist/`) are served directly by the backend root endpoint.
 * **`config.yaml`**: Configuration parameters controlling docking, polymer growth, filter cutoffs, OpenMM forcefields, water models, and simulation runtimes.
 * **`data/`**
   * `enzymes.json`: Metadata database containing PDB codes, catalytic triad residue numbers, nucleophile names, and description metadata.
@@ -202,12 +203,12 @@ Throughout the development process, several critical issues were resolved:
 1. Open a new Google Colab notebook with a GPU runtime (**Runtime > Change runtime type > GPU**).
 2. Upload the `SimDock_Colab.ipynb` file to your Colab session.
 3. Run the cells sequentially:
-   - **Cell 1 (Setup Conda):** Installs `condacolab` and automatically restarts the kernel.
+   - **Cell 1 (Setup Conda):** Installs `condacolab` and restarts the kernel.
    - **Cell 2 (Install Chemistry Packages):** Installs OpenMM, MDTraj, RDKit, and openff-toolkit via Conda.
-   - **Cell 3 (Install Streamlit & Binaries):** Installs Streamlit, meeko, and fetches GNINA/Vina executables.
-   - **Cell 4 (Clone Repository):** Downloads the latest pipeline code from GitHub.
-   - **Cell 5 (Launch Streamlit):** Starts the Streamlit app on port 8501 and forwards it using `localtunnel`.
-4. Copy the public IP address displayed in the Cell 5 output, click the `loca.lt` link, paste the IP address, and click submit.
+   - **Cell 3 (Install Backend & Binaries):** Installs FastAPI, Uvicorn, Meeko, and fetches GNINA/Vina executables.
+   - **Cell 4 (Extract Files):** Unzips the uploaded `SimDock_Project.zip` which contains the source code and pre-compiled React app.
+   - **Cell 5 (Launch Web Application):** Starts the Uvicorn FastAPI server on port 8501 using the active Conda-Colab Python kernel.
+4. Access the web interface immediately through Colab's native secure port forwarding link.
 
 ### Running with Docker
 
@@ -217,7 +218,7 @@ To deploy the entire stack in a self-contained container:
 # Build the Docker image
 docker build -t polymerdock .
 
-# Run the container, mapping Streamlit's port
+# Run the container, mapping the web app port
 docker run -p 8501:8501 polymerdock
 ```
 

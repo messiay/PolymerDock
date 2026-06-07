@@ -13,3 +13,6 @@ py3Dmol
 stmol
 matplotlib
 gemmi
+fastapi
+uvicorn
+pydantic

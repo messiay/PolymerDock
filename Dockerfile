@@ -47,9 +47,9 @@ RUN pip install --no-cache-dir \
     meeko \
     gemmi \
     pdbfixer \
-    streamlit \
-    py3Dmol \
-    stmol \
+    fastapi \
+    uvicorn \
+    pydantic \
     matplotlib \
     pyyaml \
     pandas \
@@ -59,8 +59,8 @@ RUN pip install --no-cache-dir \
 # Copy the rest of the application
 COPY . /app
 
-# Expose Streamlit port
+# Expose web app port
 EXPOSE 8501
 
-# Run the streamlit application
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Run the FastAPI application using Uvicorn
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8501"]
