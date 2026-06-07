@@ -47,6 +47,18 @@
     "scissile_bond_position": "any",
     "catalytic_cutoff_override": 4.5
   },
+  "Amylase": {
+    "pdb_id": "1HNY",
+    "description": "Human pancreatic alpha-amylase — starch degradation",
+    "catalytic_residues": { "ASP": 197, "GLU": 233, "ASP": 300 },
+    "nucleophile_res_num": 197,
+    "nucleophile_res_name": "ASP",
+    "nucleophile_atom_name": "OD1",
+    "mechanism": "glycoside_hydrolase",
+    "scissile_bond_type": "glycosidic_carbon",
+    "scissile_bond_position": "any",
+    "catalytic_cutoff_override": 3.5
+  },
   "Cellulase_Cel48F": {
     "pdb_id": "1FAE",
     "description": "Processive endocellulase — cellulose degradation",
