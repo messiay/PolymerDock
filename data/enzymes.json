@@ -23,6 +23,30 @@
     "scissile_bond_position": "terminal",
     "catalytic_cutoff_override": 4.5
   },
+  "LCC_Cutinase": {
+    "pdb_id": "6TLT",
+    "description": "Leaf-branch Compost Cutinase — high-activity PET degradation",
+    "catalytic_residues": { "SER": 165, "HIS": 242, "ASP": 210 },
+    "nucleophile_res_num": 165,
+    "nucleophile_res_name": "SER",
+    "nucleophile_atom_name": "OG",
+    "mechanism": "serine_hydrolase",
+    "scissile_bond_type": "ester_carbonyl",
+    "scissile_bond_position": "terminal",
+    "catalytic_cutoff_override": 4.5
+  },
+  "Nylonase": {
+    "pdb_id": "3W2A",
+    "description": "Nylon-degrading hydrolase — nylon oligomer cleavage",
+    "catalytic_residues": { "SER": 112, "HIS": 265, "ASP": 181 },
+    "nucleophile_res_num": 112,
+    "nucleophile_res_name": "SER",
+    "nucleophile_atom_name": "OG",
+    "mechanism": "serine_hydrolase",
+    "scissile_bond_type": "amide_carbonyl",
+    "scissile_bond_position": "any",
+    "catalytic_cutoff_override": 4.5
+  },
   "Cellulase_Cel48F": {
     "pdb_id": "1FAE",
     "description": "Processive endocellulase — cellulose degradation",
