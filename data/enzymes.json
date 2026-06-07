@@ -13,9 +13,9 @@
   },
   "Cutinase": {
     "pdb_id": "3GBS",
-    "description": "Cutinase from Fusarium solani — PET hydrolysis",
-    "catalytic_residues": { "SER": 120, "HIS": 188, "ASP": 175 },
-    "nucleophile_res_num": 120,
+    "description": "Cutinase from Aspergillus oryzae — PET hydrolysis",
+    "catalytic_residues": { "SER": 126, "HIS": 194, "ASP": 181 },
+    "nucleophile_res_num": 126,
     "nucleophile_res_name": "SER",
     "nucleophile_atom_name": "OG",
     "mechanism": "serine_hydrolase",
@@ -24,7 +24,7 @@
     "catalytic_cutoff_override": 4.5
   },
   "LCC_Cutinase": {
-    "pdb_id": "6TLT",
+    "pdb_id": "4EB0",
     "description": "Leaf-branch Compost Cutinase — high-activity PET degradation",
     "catalytic_residues": { "SER": 165, "HIS": 242, "ASP": 210 },
     "nucleophile_res_num": 165,
@@ -36,9 +36,9 @@
     "catalytic_cutoff_override": 4.5
   },
   "Nylonase": {
-    "pdb_id": "3W2A",
-    "description": "Nylon-degrading hydrolase — nylon oligomer cleavage",
-    "catalytic_residues": { "SER": 112, "HIS": 265, "ASP": 181 },
+    "pdb_id": "2D24",
+    "description": "NylB nylon-degrading hydrolase — nylon oligomer cleavage",
+    "catalytic_residues": { "SER": 112, "LYS": 115, "TYR": 215 },
     "nucleophile_res_num": 112,
     "nucleophile_res_name": "SER",
     "nucleophile_atom_name": "OG",
