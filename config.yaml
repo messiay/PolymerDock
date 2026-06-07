@@ -5,7 +5,7 @@ docking:
   vina_exhaustiveness_colab: 4  # colab only — note in README
   vina_exhaustiveness_pub: 16   # use this for final benchmark runs
   random_seed: 42
-  num_modes: 9
+  num_modes: 32
   box_padding: 10.0      # angstroms around active site
   box_padding_retry: 5.0 # added on retry if dock fails
 scoring:
