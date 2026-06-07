@@ -15,28 +15,46 @@ def scan_catalytic_viability(complex_pdb, enzyme_data, config):
     nuc_res_num = enzyme_data.get("nucleophile_res_num", 160)
     nuc_atom_name = enzyme_data.get("nucleophile_atom_name", "OG")
     
-    # 1. Locate the nucleophile atom
-    nucleophile_atom = None
-    # Look in Chain A first, or fallback to any chain
+    # 1. Locate the nucleophile residue
+    res_obj = None
     for chain in model:
         if nuc_res_num in chain:
-            res = chain[nuc_res_num]
-            if nuc_atom_name in res:
-                nucleophile_atom = res[nuc_atom_name]
-                break
-                
-    if nucleophile_atom is None:
-        # Detailed search across all chains/residues
+            res_obj = chain[nuc_res_num]
+            break
+    if res_obj is None:
         for residue in model.get_residues():
             if residue.id[1] == nuc_res_num:
-                if nuc_atom_name in residue:
-                    nucleophile_atom = residue[nuc_atom_name]
-                    break
-                    
-    if nucleophile_atom is None:
-        raise ValueError(f"Nucleophile atom ({nuc_atom_name} of residue {nuc_res_num}) not found in structure.")
+                res_obj = residue
+                break
+                
+    if res_obj is None:
+        raise ValueError(f"Nucleophile residue {nuc_res_num} not found in structure.")
         
-    P_nuc = nucleophile_atom.get_vector()
+    # Determine the nucleophilic atoms based on residue name
+    nuc_atoms = []
+    res_name = res_obj.get_resname()
+    if res_name == 'ASP':
+        for atom_name in ['OD1', 'OD2']:
+            if atom_name in res_obj:
+                nuc_atoms.append(res_obj[atom_name])
+    elif res_name == 'GLU':
+        for atom_name in ['OE1', 'OE2']:
+            if atom_name in res_obj:
+                nuc_atoms.append(res_obj[atom_name])
+    else:
+        if nuc_atom_name in res_obj:
+            nuc_atoms.append(res_obj[nuc_atom_name])
+            
+    if not nuc_atoms:
+        for atom in res_obj.get_atoms():
+            if atom.get_name() == nuc_atom_name:
+                nuc_atoms.append(atom)
+                break
+                
+    if not nuc_atoms:
+        raise ValueError(f"No nucleophile atoms found in residue {nuc_res_num} ({res_name})")
+        
+    P_nucs = [atom.get_vector() for atom in nuc_atoms]
     
     # 2. Extract ligand atoms (residues with non-blank hetero flags or names like UNL/LIG/POL)
     ligand_atoms = []
@@ -108,10 +126,11 @@ def scan_catalytic_viability(complex_pdb, enzyme_data, config):
     min_dist = float('inf')
     best_c_atom = None
     for c_atom in scissile_carbons:
-        dist = (c_atom.get_vector() - P_nuc).norm()
-        if dist < min_dist:
-            min_dist = dist
-            best_c_atom = c_atom
+        for P_nuc in P_nucs:
+            dist = (c_atom.get_vector() - P_nuc).norm()
+            if dist < min_dist:
+                min_dist = dist
+                best_c_atom = c_atom
             
     # Check if there is a catalytic cutoff override in enzyme_data
     cutoff = config['filters'].get('catalytic_cutoff', 4.5)

@@ -493,8 +493,13 @@ if st.session_state.pipeline_running:
                 # Run catalytic geometry filter
                 verdict, distance = scan_catalytic_viability(complex_pdb, enzyme_data, config)
                 
+                # Determine the cutoff used
+                cutoff = config['filters'].get('catalytic_cutoff', 4.5)
+                if enzyme_data and 'catalytic_cutoff_override' in enzyme_data:
+                    cutoff = enzyme_data['catalytic_cutoff_override']
+                
                 if verdict == 'PASS':
-                    add_log(f"  Pose {pose_num}: ✓ PASS (distance {distance:.1f}Å < {config['filters']['catalytic_cutoff']}Å)")
+                    add_log(f"  Pose {pose_num}: ✓ PASS (distance {distance:.1f}Å < {cutoff:.1f}Å)")
                     
                     # Score passing poses with MM-GBSA
                     score_data = score_binding(complex_pdb, ligand_resname='UNL', config=config)
@@ -509,7 +514,7 @@ if st.session_state.pipeline_running:
                         'score_data': score_data,
                     })
                 else:
-                    add_log(f"  Pose {pose_num}: ✗ REJECTED (distance {distance:.1f}Å > {config['filters']['catalytic_cutoff']}Å)")
+                    add_log(f"  Pose {pose_num}: ✗ REJECTED (distance {distance:.1f}Å > {cutoff:.1f}Å)")
             
             n_passed_filter = len(passing_poses)
             add_log(f"Filter complete: {n_passed_filter}/{n_grown} poses passed catalytic geometry check.")

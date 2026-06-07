@@ -57,7 +57,7 @@
     "mechanism": "glycoside_hydrolase",
     "scissile_bond_type": "glycosidic_carbon",
     "scissile_bond_position": "any",
-    "catalytic_cutoff_override": 3.5
+    "catalytic_cutoff_override": 4.5
   },
   "Cellulase_Cel48F": {
     "pdb_id": "1FAE",
@@ -69,6 +69,6 @@
     "mechanism": "glycoside_hydrolase",
     "scissile_bond_type": "glycosidic_carbon",
     "scissile_bond_position": "any",
-    "catalytic_cutoff_override": 3.5
+    "catalytic_cutoff_override": 4.5
   }
 }
