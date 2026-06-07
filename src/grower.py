@@ -18,19 +18,29 @@ def get_enzyme_coords(enzyme_pdb):
         coords.append(atom.get_vector().get_array())
     return np.array(coords)
 
-def find_heavy_linking_atoms(mol):
+def find_heavy_linking_atoms(mol, linkage_type='ester'):
     """
-    Finds the head carbon and tail oxygen in a heavy-atom-only molecule.
+    Finds the head carbon and tail linking atom in a heavy-atom-only molecule
+    based on the linkage type.
     """
-    # Find carboxylic acid oxygen (single-bonded to carbonyl C, and has degree 1)
-    pat = Chem.MolFromSmarts('[CX3](=O)[OX2]')
-    matches = mol.GetSubstructMatches(pat)
+    LINKAGE_PATTERNS = {
+        'ester': ('[CX3](=O)[OX2]', 2),
+        'amide': ('[CX3](=O)[NX3]', 2),
+        'glycosidic': ('[OX2]', 0),
+    }
+    
     tail_idx = None
-    for match in matches:
-        o_idx = match[2]
-        if mol.GetAtomWithIdx(o_idx).GetDegree() == 1:
-            tail_idx = o_idx
-            break
+    if linkage_type in LINKAGE_PATTERNS:
+        pattern, match_idx = LINKAGE_PATTERNS[linkage_type]
+        pat = Chem.MolFromSmarts(pattern)
+        matches = mol.GetSubstructMatches(pat)
+        if matches:
+            for match in matches:
+                idx = match[match_idx]
+                if mol.GetAtomWithIdx(idx).GetDegree() == 1:
+                    tail_idx = idx
+                    break
+                    
     if tail_idx is None:
         tail_idx = mol.GetNumAtoms() - 1
         
@@ -40,20 +50,34 @@ def find_heavy_linking_atoms(mol):
         if atom.GetSymbol() == 'C' and atom.GetNumRadicalElectrons() > 0:
             head_idx = atom.GetIdx()
             break
+    if head_idx == 0:
+        # Fallback consistent with builder.py:
+        # Try to find a carbon that is not the tail atom
+        for atom in mol.GetAtoms():
+            if atom.GetSymbol() == 'C' and atom.GetIdx() != tail_idx:
+                head_idx = atom.GetIdx()
+                break
             
     return head_idx, tail_idx
 
-def find_active_tail(mol):
+def find_active_tail(mol, linkage_type='ester'):
     """
-    Dynamically finds the active tail oxygen (degree 1 carboxylic acid oxygen)
-    in the growing polymer chain.
+    Dynamically finds the active tail atom (degree 1) in the growing polymer chain.
     """
-    pat = Chem.MolFromSmarts('[CX3](=O)[OX2]')
-    matches = mol.GetSubstructMatches(pat)
-    for match in matches:
-        o_idx = match[2]
-        if mol.GetAtomWithIdx(o_idx).GetDegree() == 1:
-            return o_idx
+    LINKAGE_PATTERNS = {
+        'ester': ('[CX3](=O)[OX2]', 2),
+        'amide': ('[CX3](=O)[NX3]', 2),
+        'glycosidic': ('[OX2]', 0),
+    }
+    
+    if linkage_type in LINKAGE_PATTERNS:
+        pattern, match_idx = LINKAGE_PATTERNS[linkage_type]
+        pat = Chem.MolFromSmarts(pattern)
+        matches = mol.GetSubstructMatches(pat)
+        for match in matches:
+            idx = match[match_idx]
+            if mol.GetAtomWithIdx(idx).GetDegree() == 1:
+                return idx
     # Fallback to the last atom
     return mol.GetNumAtoms() - 1
 
@@ -222,7 +246,7 @@ def optimize_hydrogens(mol):
     except Exception:
         pass
 
-def grow_polymer(anchor_pose, monomer_smiles, chain_length, enzyme_pdb, config):
+def grow_polymer(anchor_pose, monomer_smiles, chain_length, enzyme_pdb, config, linkage_type='ester'):
     """
     Sequentially grows the anchor pose to the target chain length using 
     torsion-sampling and energy scoring.
@@ -239,7 +263,7 @@ def grow_polymer(anchor_pose, monomer_smiles, chain_length, enzyme_pdb, config):
     monomer_3d = Chem.RemoveHs(monomer_3d)
     
     # Find linking indices in the heavy monomer template
-    monomer_head_idx, monomer_tail_idx = find_heavy_linking_atoms(monomer_3d)
+    monomer_head_idx, monomer_tail_idx = find_heavy_linking_atoms(monomer_3d, linkage_type=linkage_type)
     num_monomer_atoms = monomer_3d.GetNumAtoms()
     
     # Load enzyme coordinates
@@ -248,7 +272,7 @@ def grow_polymer(anchor_pose, monomer_smiles, chain_length, enzyme_pdb, config):
     # 3. Growth loop
     for step in range(1, chain_length):
         # Dynamically find the active tail oxygen
-        active_tail = find_active_tail(current)
+        active_tail = find_active_tail(current, linkage_type=linkage_type)
         
         candidates = []
         num_samples = config['growth'].get('rotation_samples', 36)

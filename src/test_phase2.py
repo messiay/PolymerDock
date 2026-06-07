@@ -36,11 +36,10 @@ def test_phase2():
     print("Generating mock anchor (1-mer)...")
     anchor = build_polymer(smiles, 1)
     
-    # Translate anchor to the active site center to mimic docking
     conf = anchor.GetConformer()
     coords = np.array([conf.GetAtomPosition(i) for i in range(anchor.GetNumAtoms())])
     centroid = np.mean(coords, axis=0)
-    translation = center - centroid
+    translation = center - centroid + np.array([-2.0, -2.0, -2.0])
     
     for i in range(anchor.GetNumAtoms()):
         pos = np.array(conf.GetAtomPosition(i))

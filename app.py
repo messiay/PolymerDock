@@ -455,7 +455,7 @@ if st.session_state.pipeline_running:
             for i, anchor_pose in enumerate(anchor_poses):
                 add_log(f"  Pose {i+1}/{n_anchor_poses}: Growing...")
                 if remaining_growth > 0:
-                    grown = grow_polymer(anchor_pose, monomer_smiles, chain_length, pdb_file, config)
+                    grown = grow_polymer(anchor_pose, monomer_smiles, chain_length, pdb_file, config, linkage_type=linkage_type)
                 else:
                     grown = anchor_pose
                     
