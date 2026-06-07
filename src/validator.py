@@ -9,6 +9,7 @@ import logging
 logger = logging.getLogger('simdock')
 
 # OpenMM imports
+OPENMM_ERROR = None
 try:
     from openmm.app import PDBFile, Modeller, ForceField, DCDReporter, PDBReporter, HBonds
     from openmm import LangevinIntegrator, MonteCarloBarostat, Platform, unit
@@ -18,6 +19,7 @@ try:
     OPENMM_AVAILABLE = True
 except ImportError as e:
     import sys
+    OPENMM_ERROR = str(e)
     logger.warning(f"OpenMM or openmmforcefields import failed: {e}")
     OPENMM_AVAILABLE = False
 

@@ -14,7 +14,7 @@ from src.docking import dock_anchor
 from src.grower import grow_polymer
 from src.scanner import scan_catalytic_viability
 from src.scorer import score_binding
-from src.validator import run_md_simulation, analyze_trajectory, OPENMM_AVAILABLE
+from src.validator import run_md_simulation, analyze_trajectory, OPENMM_AVAILABLE, OPENMM_ERROR
 from src.utils import save_complex, setup_logging
 
 # Setup page config
@@ -308,6 +308,7 @@ st.write("---")
 
 if not OPENMM_AVAILABLE:
     st.warning("⚠️ **Warning:** OpenMM or its forcefields are not available in this environment. "
+               f"(Error: {OPENMM_ERROR}). "
                "The pipeline will fall back to generating **MOCK DATA** for the Molecular Dynamics (Phase 4) validation. "
                "Do not use these simulated trajectories or verdicts for publication.")
 
