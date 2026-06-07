@@ -47,7 +47,9 @@ notebook = {
         "!wget -q https://github.com/gnina/gnina/releases/download/v1.0.3/gnina -O /usr/bin/gnina\n",
         "!chmod +x /usr/bin/gnina\n",
         "!wget -q https://github.com/ccsb-scripps/AutoDock-Vina/releases/download/v1.2.5/vina_1.2.5_linux_x86_64 -O /usr/bin/vina\n",
-        "!chmod +x /usr/bin/vina"
+        "!chmod +x /usr/bin/vina\n",
+        "!wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /usr/bin/cloudflared\n",
+        "!chmod +x /usr/bin/cloudflared"
       ],
       "outputs": [],
       "execution_count": None
