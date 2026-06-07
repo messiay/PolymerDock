@@ -78,9 +78,10 @@ notebook = {
       "cell_type": "code",
       "metadata": {},
       "source": [
-        "# 4. Unzip your uploaded project files\n",
-        "# IMPORTANT: Upload 'SimDock_Project.zip' to Colab's file browser (left sidebar) before running this.\n",
-        "!unzip -q -o SimDock_Project.zip -d polymerDock\n",
+        "# 4. Retrieve project source files\n",
+        "# Clones from your GitHub repository directly. If cloning fails (e.g. private repo restrictions),\n",
+        "# it falls back to unzipping 'SimDock_Project.zip' if you uploaded it manually.\n",
+        "!git clone https://github.com/messiay/PolymerDock.git polymerDock || (unzip -q -o SimDock_Project.zip -d polymerDock && echo 'Fallback to local SimDock_Project.zip successful')\n",
         "%cd polymerDock"
       ],
       "outputs": [],
