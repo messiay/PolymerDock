@@ -75,7 +75,7 @@ notebook = {
         "import time\n",
         "\n",
         "print(\"Starting Streamlit...\")\n",
-        "subprocess.Popen([\"streamlit\", \"run\", \"app.py\", \"--server.port\", \"8501\", \"--server.headless\", \"true\"])\n",
+        "subprocess.Popen([\"python\", \"-m\", \"streamlit\", \"run\", \"app.py\", \"--server.port\", \"8501\", \"--server.headless\", \"true\"])\n",
         "time.sleep(3)\n",
         "\n",
         "print(\"\\n✅ SUCCESS! Click the link below to open your app in a new tab:\")\n",
