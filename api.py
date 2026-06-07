@@ -290,10 +290,14 @@ def run_pipeline_thread(task_id, request: SimulationRequest):
         # Save canonical outputs for this task
         best_complex = os.path.join(task_dir, "complex.pdb")
         best_ligand = os.path.join(task_dir, "grown_poly.pdb")
-        shutil.copy(best['complex_pdb'], best_complex)
-        shutil.copy(best['ligand_pdb'], best_ligand)
+        if os.path.abspath(best['complex_pdb']) != os.path.abspath(best_complex):
+            shutil.copy(best['complex_pdb'], best_complex)
+        if os.path.abspath(best['ligand_pdb']) != os.path.abspath(best_ligand):
+            shutil.copy(best['ligand_pdb'], best_ligand)
         if os.path.exists(best['traj_dcd']):
-            shutil.copy(best['traj_dcd'], os.path.join(task_dir, "trajectory.dcd"))
+            dest_traj = os.path.join(task_dir, "trajectory.dcd")
+            if os.path.abspath(best['traj_dcd']) != os.path.abspath(dest_traj):
+                shutil.copy(best['traj_dcd'], dest_traj)
             
         logger.info("═══ Pipeline Complete ═══")
         logger.info(f"Best pose: #{best['pose_num']} | Score: {best['score_data']['final_score']:.2f} | "
